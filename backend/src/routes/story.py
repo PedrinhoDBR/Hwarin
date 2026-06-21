@@ -6,12 +6,11 @@ from src.models.user_story import UserStory
 from src.db.database import get_db
 from src.models.story import Story
 from src.models.story_filter import StoryFilter
-from src.schemas.story import StoryResponse,StoryCreate
+from src.schemas.story import StoryResponse, StoryCreate
 from src.utils.user import get_current_user
 from src.models.user import User
 from src.models.chapter import Chapter
 from src.models.story_infos import StoryInfos
-from src.models.story_filter import StoryFilter
 from src.models.story_rating import StoryRating
 from src.models.story_suggestion import StorySuggestion
 

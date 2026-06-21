@@ -1,112 +1,67 @@
-import React, { useState } from 'react';
-import {useMutation,useQuery,} from '@tanstack/react-query';
-import {useNavigate,useParams,} from 'react-router-dom';
-import StoryForm from '../components/create/StoryForm';
+import { useState } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { useNavigate, useParams } from 'react-router-dom';
+
 import ChapterEditor from '../components/create/ChapterEditor';
-import {Tabs,TabsContent,TabsList,TabsTrigger,} from '../components/ui/tabs';
-import { authFetch } from '../services/api';
-import { useToast } from '../hooks/useToast';
+import StoryForm from '../components/create/StoryForm';
 import PageHeader from '../components/PageHeader';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { useToast } from '../hooks/useToast';
+import {
+  createStory,
+  getStory,
+  updateStory,
+} from '../services/stories';
+import type { Story, StoryPayload } from '../types/story';
 
-type StoryData = {
-  title: string;
-  subtitle?: string;
-  synopsis: string;
-  language: string;
-  status: string;
-  cover?: string;
-  master_story_id?: number | null;
-  genres: string[];
-  tags: string[];
-};
-
-type StoryRecord = StoryData & {
-  id: number;
-};
-
-type StoryFormData = StoryData & {
+type StoryFormData = StoryPayload & {
   is_collaborative?: boolean;
 };
+
+function toStoryPayload(formData: StoryFormData): StoryPayload {
+  return {
+    title: formData.title,
+    subtitle: formData.subtitle,
+    synopsis: formData.synopsis,
+    language: formData.language,
+    status: formData.status,
+    cover: formData.cover,
+    genres: formData.genres,
+    tags: formData.tags,
+    master_story_id: formData.master_story_id,
+  };
+}
 
 export default function CreateStory() {
   const navigate = useNavigate();
   const { showToast, ToastContainer } = useToast();
-
   const { id } = useParams();
-  const isEditing = (id !== 'new') && (id !== undefined);
+  const isEditing = id !== 'new' && id !== undefined;
 
-  const [createdStory, setCreatedStory] =
-    useState<StoryRecord | null>(null);
+  const [createdStory, setCreatedStory] = useState<Story | null>(null);
+  const [activeTab, setActiveTab] = useState('info');
 
-  const [activeTab, setActiveTab] =
-    useState('info');
-
-  const {
-    data: story,
-    isLoading: isLoadingStory,
-  } = useQuery<StoryRecord | null>({
+  const { data: story, isLoading: isLoadingStory } = useQuery<Story | null>({
     queryKey: ['story', id],
-
     enabled: isEditing,
-
     queryFn: async () => {
       if (!id) return null;
-      const response = await authFetch(
-        `/api/stories/${id}`
-      );
-
-      if (!response.ok) {
-        throw new Error(
-          'Erro ao buscar história'
-        );
-      }
-
-      return response.json();
+      return getStory(id);
     },
   });
+
   const activeStory = createdStory ?? story;
 
-  const saveStory = useMutation<StoryRecord, Error, StoryData>({
-    mutationFn: async (
-      storyData: StoryData
-    ) => {
-      const response = await authFetch(
-        isEditing
-          ? `/api/stories/${id}`
-          : '/api/stories',
-
-        {
-          method: isEditing
-            ? 'PUT'
-            : 'POST',
-
-          headers: {
-            'Content-Type':
-              'application/json',
-          },
-
-          body: JSON.stringify(storyData),
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.detail ||
-            'Erro ao salvar história'
-        );
-      }
-
-      return data;
-    },
-
+  const saveStory = useMutation<Story, Error, StoryPayload>({
+    mutationFn: (storyData) =>
+      isEditing && id
+        ? updateStory(id, storyData)
+        : createStory(storyData),
     onError: (error) => {
-      showToast(error.message || 'Erro ao salvar história', 'error');
+      showToast(error.message || 'Erro ao salvar historia', 'error');
     },
-
     onSuccess: (data) => {
-      showToast('História salva com sucesso!', 'success');
+      showToast('Historia salva com sucesso!', 'success');
       setCreatedStory(data);
       setActiveTab('chapters');
 
@@ -118,131 +73,79 @@ export default function CreateStory() {
     },
   });
 
-  const handleSaveStory = (
-    formData: StoryFormData
-  ) => {
-    saveStory.mutate({
-      title: formData.title,
-      subtitle: formData.subtitle,
-      synopsis: formData.synopsis,
-      language: formData.language,
-      status: formData.status,
-      cover: formData.cover,
-      genres: formData.genres,
-      tags: formData.tags,
-      master_story_id:
-        formData.master_story_id,
-    });
-  };
+  function handleSaveStory(formData: StoryFormData) {
+    saveStory.mutate(toStoryPayload(formData));
+  }
 
   if (isLoadingStory) {
     return (
       <div className="min-h-screen">
-        <PageHeader
-          title={isEditing ? 'Editar historia' : 'Nova historia'}
-        />
-        <section className="p-6 text-foreground">
-          Carregando historia...
-        </section>
+        <PageHeader title={isEditing ? 'Editar historia' : 'Nova historia'} />
+        <section className="p-6 text-foreground">Carregando historia...</section>
       </div>
     );
   }
 
   return (
-  <div className="min-h-screen">
-    <PageHeader
-      title={isEditing ? 'Editar historia' : 'Nova historia'}
-    />
+    <div className="min-h-screen">
+      <PageHeader title={isEditing ? 'Editar historia' : 'Nova historia'} />
 
-  <section className="p-6 text-foreground justify-center overflow-x-hidden">
-    <div className="w-full max-w-full rounded-3xl border border-white/20 bg-black/60">
-      {/* <div className="mb-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate(-1)}
-          className="gap-2 text-muted-foreground"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Voltar
-        </Button>
-      </div> */}
-        <div className="p-6">
-          <Tabs
-            value={activeTab}
-            onValueChange={setActiveTab}
-          >
-            <TabsList className="bg-secondary/30 border border-border/30 mb-6">
-              <TabsTrigger
-                value="info"
-                className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary"
-              >
-                Informações
-              </TabsTrigger>
+      <section className="justify-center overflow-x-hidden p-6 text-foreground">
+        <div className="w-full max-w-full rounded-3xl border border-white/20 bg-black/60">
+          <div className="p-6">
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="mb-6 border border-border/30 bg-secondary/30">
+                <TabsTrigger
+                  value="info"
+                  className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary"
+                >
+                  Informacoes
+                </TabsTrigger>
 
-              <TabsTrigger
-                value="chapters"
-                disabled={!activeStory}
-                className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary"
-              >
-                Capítulos
-              </TabsTrigger>
-            </TabsList>
+                <TabsTrigger
+                  value="chapters"
+                  disabled={!activeStory}
+                  className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary"
+                >
+                  Capitulos
+                </TabsTrigger>
+              </TabsList>
 
-            <TabsContent value="info">
-              <StoryForm
-                initialData={
-                  story
-                    ? {
-                        title:
-                          story.title,
-                        subtitle:
-                          story.subtitle,
-                        synopsis:
-                          story.synopsis,
-                        language:
-                          story.language,
-                        status:
-                          story.status,
-                        cover:
-                          story.cover,
-                        genres:
-                          story.genres,
-                        tags:
-                          story.tags,
-                        master_story_id:
-                          story.master_story_id,
-                      }
-                    : undefined
-                }
-                onSubmit={
-                  handleSaveStory
-                }
-                isLoading={
-                  saveStory.isPending
-                }
-              />
-            </TabsContent>
-
-            <TabsContent value="chapters">
-              {activeStory && (
-                <ChapterEditor
-                  storyId={
-                    activeStory.id
+              <TabsContent value="info">
+                <StoryForm
+                  initialData={
+                    story
+                      ? {
+                          title: story.title ?? '',
+                          subtitle: story.subtitle ?? '',
+                          synopsis: story.synopsis ?? '',
+                          language: story.language ?? '',
+                          status: story.status ?? '',
+                          cover: story.cover ?? '',
+                          genres: story.genres ?? [],
+                          tags: story.tags ?? [],
+                          master_story_id: story.master_story_id,
+                        }
+                      : undefined
                   }
-                  onDone={() =>
-                    navigate(
-                      `/historia/${activeStory.id}`
-                    )
-                  }
+                  onSubmit={handleSaveStory}
+                  isLoading={saveStory.isPending}
                 />
-              )}
-            </TabsContent>
-          </Tabs>
+              </TabsContent>
+
+              <TabsContent value="chapters">
+                {activeStory && (
+                  <ChapterEditor
+                    storyId={activeStory.id}
+                    onDone={() => navigate(`/historia/${activeStory.id}`)}
+                  />
+                )}
+              </TabsContent>
+            </Tabs>
+          </div>
         </div>
-      </div>
-      <ToastContainer />
-    </section>
-  </div>
+        <ToastContainer />
+      </section>
+    </div>
   );
 }

@@ -15,8 +15,7 @@ import {
   SelectValue,
 } from '../components/ui/select';
 
-import { authFetch } from '../services/api';
-import type { Story } from './Home';
+import { getStories } from '../services/stories';
 
 const STATUS_FILTERS = [
   { value: 'em_andamento', label: 'Em andamento' },
@@ -43,35 +42,6 @@ type SearchFilters = {
   genre: string;
   tag: string;
 };
-
-async function getStories({
-  query,
-  status,
-  language,
-  genre,
-  tag,
-}: SearchFilters): Promise<Story[]> {
-  const params = new URLSearchParams();
-
-  if (query) params.set('q', query);
-  if (status) params.set('status', status);
-  if (language) params.set('language', language);
-  if (genre) params.set('genre', genre);
-  if (tag) params.set('tag', tag);
-
-  const queryString = params.toString();
-  const endpoint = queryString
-    ? `/api/stories?${queryString}`
-    : '/api/stories';
-
-  const response = await authFetch(endpoint);
-
-  if (!response.ok) {
-    throw new Error('Erro ao buscar historias');
-  }
-
-  return response.json();
-}
 
 export default function SearchPage() {
   const [searchParams, setSearchParams] =

@@ -5,35 +5,8 @@ import { BookOpen, UserRound } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import StoryCard from '../components/home/StoryCard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { authFetch } from '../services/api';
-import type { Story } from './Home';
-
-type Author = {
-  id: number;
-  username: string;
-  avatar_url?: string | null;
-  bio?: string | null;
-};
-
-async function getFollowedStories(): Promise<Story[]> {
-  const response = await authFetch('/api/stories/following');
-
-  if (!response.ok) {
-    throw new Error('Erro ao buscar historias seguidas');
-  }
-
-  return response.json();
-}
-
-async function getFollowedAuthors(): Promise<Author[]> {
-  const response = await authFetch('/api/users/following');
-
-  if (!response.ok) {
-    throw new Error('Erro ao buscar autores seguidos');
-  }
-
-  return response.json();
-}
+import { getFollowedStories } from '../services/stories';
+import { getFollowedAuthors } from '../services/users';
 
 export default function Library() {
   const {

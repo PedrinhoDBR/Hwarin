@@ -10,7 +10,12 @@ import ReactQuill from 'react-quill-new';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { authFetch } from '../../services/api';
+import {
+  createChapter as createChapterRequest,
+  deleteChapter as deleteChapterRequest,
+  getChaptersByStory,
+  updateChapter as updateChapterRequest,
+} from '../../services/chapters';
 
 export default function ChapterEditor({ storyId, onDone }) {
   const queryClient = useQueryClient();
@@ -22,15 +27,7 @@ export default function ChapterEditor({ storyId, onDone }) {
 
   const { data: chapters = [] } = useQuery({
     queryKey: ['edit-chapters', storyId],
-    queryFn: async () => {
-      const response = await authFetch(`/api/chapters/story/${storyId}`);
-
-      if (!response.ok) {
-        throw new Error('Erro ao buscar capitulos');
-      }
-
-      return response.json();
-    },
+    queryFn: () => getChaptersByStory(storyId),
   });
 
   const sorted = [...chapters].sort(
@@ -44,22 +41,7 @@ export default function ChapterEditor({ storyId, onDone }) {
   }, [editing, sorted.length]);
 
   const createChapter = useMutation({
-    mutationFn: async (data) => {
-      const response = await authFetch('/api/chapters', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      });
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.detail || 'Erro ao criar capitulo');
-      }
-
-      return result;
-    },
+    mutationFn: createChapterRequest,
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['edit-chapters', storyId],
@@ -69,22 +51,7 @@ export default function ChapterEditor({ storyId, onDone }) {
   });
 
   const updateChapter = useMutation({
-    mutationFn: async ({ id, data }) => {
-      const response = await authFetch(`/api/chapters/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      });
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.detail || 'Erro ao atualizar capitulo');
-      }
-
-      return result;
-    },
+    mutationFn: ({ id, data }) => updateChapterRequest(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['edit-chapters', storyId],
@@ -94,17 +61,7 @@ export default function ChapterEditor({ storyId, onDone }) {
   });
 
   const deleteChapter = useMutation({
-    mutationFn: async (id) => {
-      const response = await authFetch(`/api/chapters/${id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        throw new Error('Erro ao deletar capitulo');
-      }
-
-      return true;
-    },
+    mutationFn: deleteChapterRequest,
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['edit-chapters', storyId],

@@ -14,7 +14,7 @@ import {
 import { useEffect } from 'react';
 
 import { alpha, createAppTheme } from '../theme';
-import { authFetch } from '../services/api';
+import { getMe } from '../services/users';
 import { useAuth } from '../hooks/UseAuth';
 
 const NAV_ITEMS = [
@@ -40,16 +40,7 @@ export default function Layout() {
   useEffect(() => {
     async function validateSession() {
       try {
-        const response = await authFetch(
-          '/api/auth/me'
-        );
-
-        if (response.status === 401) {
-          clearAuth();
-          navigate('/login', {
-            replace: true,
-          });
-        }
+        await getMe();
       } catch {
         clearAuth();
 

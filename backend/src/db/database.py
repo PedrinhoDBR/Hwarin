@@ -1,20 +1,14 @@
-import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
-from dotenv import load_dotenv
 
-load_dotenv()
+from src.config import settings
 
-DB_NAME = os.getenv("DB_NAME", "database.sqlite")
-ENVIRONMENT = os.getenv("ENVIRONMENT", "PRODUCTION")
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-
-if DATABASE_URL:
-    engine = create_engine(DATABASE_URL)
+if settings.database_url:
+    engine = create_engine(settings.database_url)
 else:
     engine = create_engine(
-        f"sqlite:///{DB_NAME}",
+        f"sqlite:///{settings.db_name}",
         connect_args={"check_same_thread": False},
     )
 

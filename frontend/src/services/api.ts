@@ -1,25 +1,11 @@
-import {
-  AUTH_STORAGE_KEY,
-} from '../context/AuthContext';
+import { AUTH_STORAGE_KEY } from '../context/AuthContext';
+import type { LoginResponse } from '../types/auth';
 
-import type {
-  LoginResponse,
-} from '../types/auth';
+const API_URL = import.meta.env.VITE_API_URL ?? '';
 
-import { logout } from './auth';
+type JsonRecord = Record<string, unknown>;
 
-const API_URL =
-  import.meta.env.VITE_API_URL ?? '';
-
-interface RegisterPayload {
-  username: string;
-  email: string;
-  password: string;
-}
-
-async function readJsonResponse(
-  response: Response
-): Promise<Record<string, unknown>> {
+async function readJsonResponse(response: Response): Promise<JsonRecord> {
   try {
     return await response.json();
   } catch {
@@ -27,10 +13,7 @@ async function readJsonResponse(
   }
 }
 
-function getErrorMessage(
-  data: Record<string, unknown>,
-  fallback: string
-): string {
+function getErrorMessage(data: JsonRecord, fallback: string): string {
   if (typeof data.detail === 'string') {
     return data.detail;
   }
@@ -46,135 +29,42 @@ function getErrorMessage(
   return fallback;
 }
 
-function extractToken(
-  data: Record<string, unknown>
-): string | null {
-  const candidates = [
-    data.token,
-    data.accessToken,
-    data.jwt,
-  ];
-
-  const token = candidates.find(
-    (value) =>
-      typeof value === 'string' &&
-      value.length > 0
-  );
-
-  return typeof token === 'string'
-    ? token
-    : null;
+function clearStoredSession() {
+  localStorage.removeItem(AUTH_STORAGE_KEY);
 }
 
-export async function login(
-  email: string,
-  password: string
-): Promise<LoginResponse> {
-  const res = await fetch(
-    `${API_URL}/api/auth/login`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type':
-          'application/json',
-      },
-      body: JSON.stringify({
-        email,
-        password,
-      }),
-    }
-  );
+function normalizeJsonInit(init: RequestInit = {}): RequestInit {
+  const headers = new Headers(init.headers);
 
-  const data = await readJsonResponse(res);
-
-  if (!res.ok) {
-    throw new Error(
-      getErrorMessage(data, 'Erro no login')
-    );
-  }
-
-  const token =
-    extractToken(data);
-
-  if (!data.user || !token) {
-    throw new Error(
-      'Login realizado sem token JWT válido.'
-    );
+  if (typeof init.body === 'string' && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
   }
 
   return {
-    user: data.user,
-    token,
+    ...init,
+    headers,
   };
 }
 
-export async function registerUser(
-  payload: RegisterPayload
-) {
-  const response = await fetch(
-    `${API_URL}/api/users/`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type':
-          'application/json',
-      },
-      body: JSON.stringify({
-        ...payload,
-        role: 'user',
-      }),
-    }
-  );
-
-  const data =
-    await readJsonResponse(response);
-
-  if (!response.ok) {
-    throw new Error(
-      getErrorMessage(
-        data,
-        'Erro ao criar cadastro'
-      )
-    );
-  }
-
-  return data;
-}
-
 export function getStoredToken(): string | null {
-  const rawSession =
-    localStorage.getItem(
-      AUTH_STORAGE_KEY
-    );
+  const rawSession = localStorage.getItem(AUTH_STORAGE_KEY);
 
   if (!rawSession) {
     return null;
   }
 
   try {
-    const session = JSON.parse(
-      rawSession
-    ) as Partial<LoginResponse>;
-
-    return typeof session.token ===
-      'string'
-      ? session.token
-      : null;
+    const session = JSON.parse(rawSession) as Partial<LoginResponse>;
+    return typeof session.token === 'string' ? session.token : null;
   } catch {
     return null;
   }
 }
 
-function isTokenExpired(
-  token: string
-): boolean {
+function isTokenExpired(token: string): boolean {
   try {
-    const payload = JSON.parse(
-      atob(token.split('.')[1])
-    );
-
-    const now =
-      Date.now() / 1000;
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const now = Date.now() / 1000;
 
     return payload.exp < now;
   } catch {
@@ -182,58 +72,75 @@ function isTokenExpired(
   }
 }
 
-export async function authFetch(
-  input: RequestInfo | URL,
-  init: RequestInit = {}
-) {
-  const token =
-    getStoredToken();
+export async function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
+  const token = getStoredToken();
 
   if (!token) {
-    logout();
-
-    throw new Error(
-      'Sem sessão'
-    );
+    clearStoredSession();
+    throw new Error('Sem sessao');
   }
 
   if (isTokenExpired(token)) {
-    logout();
-
-    throw new Error(
-      'Sessão expirada'
-    );
+    clearStoredSession();
+    throw new Error('Sessao expirada');
   }
 
-  const headers = new Headers(
-    init.headers
-  );
+  const headers = new Headers(init.headers);
+  headers.set('Authorization', `Bearer ${token}`);
 
-  headers.set(
-    'Authorization',
-    `Bearer ${token}`
-  );
-
-  const url =
-    typeof input === 'string'
-      ? `${API_URL}${input}`
-      : input;
-
-  const response = await fetch(
-    url,
-    {
-      ...init,
-      headers,
-    }
-  );
+  const url = typeof input === 'string' ? `${API_URL}${input}` : input;
+  const response = await fetch(url, {
+    ...init,
+    headers,
+  });
 
   if (response.status === 401) {
-    logout();
-
-    throw new Error(
-      'Não autorizado'
-    );
+    clearStoredSession();
+    throw new Error('Nao autorizado');
   }
 
   return response;
+}
+
+export async function publicApiJson<T>(
+  input: string,
+  init: RequestInit = {},
+  fallback = 'Erro na requisicao'
+): Promise<T> {
+  const response = await fetch(`${API_URL}${input}`, normalizeJsonInit(init));
+  const data = await readJsonResponse(response);
+
+  if (!response.ok) {
+    throw new Error(getErrorMessage(data, fallback));
+  }
+
+  return data as T;
+}
+
+export async function apiJson<T>(
+  input: string,
+  init: RequestInit = {},
+  fallback = 'Erro na requisicao'
+): Promise<T> {
+  const response = await authFetch(input, normalizeJsonInit(init));
+  const data = await readJsonResponse(response);
+
+  if (!response.ok) {
+    throw new Error(getErrorMessage(data, fallback));
+  }
+
+  return data as T;
+}
+
+export async function apiVoid(
+  input: string,
+  init: RequestInit = {},
+  fallback = 'Erro na requisicao'
+): Promise<void> {
+  const response = await authFetch(input, normalizeJsonInit(init));
+
+  if (!response.ok) {
+    const data = await readJsonResponse(response);
+    throw new Error(getErrorMessage(data, fallback));
+  }
 }

@@ -1,111 +1,83 @@
-import React, { useEffect, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 
-import StoryHeader from '../components/story/StoryHeader';
+import { PageHeader } from '../components';
 import ChapterList from '../components/story/ChapterList';
 import CommentsSection from '../components/story/CommentsSection';
-import { authFetch } from '../services/api';
-import { PageHeader } from '../components';
+import StoryHeader from '../components/story/StoryHeader';
+import {
+  getChaptersByStory,
+  type Chapter,
+} from '../services/chapters';
+import {
+  followStory,
+  getStoryFollows,
+  type StoryFollow,
+  unfollowStory,
+} from '../services/follows';
+import {
+  getStoryComments,
+  getStoryRatings,
+  type Rating,
+} from '../services/ratings';
+import { getStory } from '../services/stories';
+import { getMe } from '../services/users';
+import type { AuthUser } from '../types/auth';
+import type { Story } from '../types/story';
 
 export default function StoryDetails() {
   const storyId = window.location.pathname.split('/historia/')[1]?.split('/')[0];
-
-  const [user, setUser] = useState(null);
   const queryClient = useQueryClient();
+  const [user, setUser] = useState<AuthUser | null>(null);
 
   useEffect(() => {
-    authFetch('/api/auth/me')
-      .then(r => {
-        if (!r.ok) throw new Error();
-        return r.json();
-      })
+    getMe()
       .then(setUser)
       .catch(() => setUser(null));
   }, []);
 
-  const { data: story, isLoading: loadingStory } = useQuery({
+  const { data: story, isLoading: loadingStory } = useQuery<Story>({
     queryKey: ['story', storyId],
-    enabled: !!storyId,
-    queryFn: async () => {
-      const res = await authFetch(`/api/stories/${storyId}`);
-      if (!res.ok) throw new Error('Erro ao buscar história');
-      return res.json();
-    },
+    enabled: Boolean(storyId),
+    queryFn: () => getStory(storyId ?? ''),
   });
 
-  const { data: chapters = [] } = useQuery({
+  const { data: chapters = [] } = useQuery<Chapter[]>({
     queryKey: ['chapters', storyId],
-    enabled: !!storyId,
-    queryFn: async () => {
-      const res = await authFetch(`/api/chapters/story/${storyId}`);
-      if (!res.ok) throw new Error();
-      return res.json();
-    },
+    enabled: Boolean(storyId),
+    queryFn: () => getChaptersByStory(storyId ?? ''),
   });
 
-  const { data: comments = [] } = useQuery({
+  const { data: comments = [] } = useQuery<Rating[]>({
     queryKey: ['comments', storyId],
-    enabled: !!storyId,
-    queryFn: async () => {
-      const res = await authFetch(
-        `/api/ratings/comments?story_id=${storyId}`
-      );
-
-      if (!res.ok) {
-        throw new Error();
-      }
-
-      return res.json();
-    },
+    enabled: Boolean(storyId),
+    queryFn: () => getStoryComments(storyId ?? ''),
   });
 
-  const { data: ratings = [] } = useQuery({
+  const { data: ratings = [] } = useQuery<Rating[]>({
     queryKey: ['ratings', storyId],
-    enabled: !!storyId,
-    queryFn: async () => {
-      const res = await authFetch(
-        `/api/ratings?story_id=${storyId}`
-      );
-
-      if (!res.ok) {
-        throw new Error();
-      }
-
-      return res.json();
-    },
+    enabled: Boolean(storyId),
+    queryFn: () => getStoryRatings(storyId ?? ''),
   });
 
-  const { data: follows = [] } = useQuery({
+  const { data: follows = [] } = useQuery<StoryFollow[]>({
     queryKey: ['follows', storyId],
-    enabled: !!storyId,
-    queryFn: async () => {
-      const res = await authFetch(`/api/follows?story_id=${storyId}`);
-      if (!res.ok) throw new Error();
-      return res.json();
-    },
+    enabled: Boolean(storyId),
+    queryFn: () => getStoryFollows(storyId ?? ''),
   });
 
-  const isFollowing =
-    user && follows.some(f => f.user_id === user.id);
+  const isFollowing = Boolean(
+    user && follows.some((follow) => follow.user_id === user.id)
+  );
 
   const followMutation = useMutation({
-    mutationFn: async () => {
-      let response;
-
-      if (isFollowing) {
-        response = await authFetch(`/api/follows/${storyId}`, {
-          method: 'DELETE',
-        });
-      } else {
-        response = await authFetch(`/api/follows?story_id=${storyId}`, {
-          method: 'POST',
-        });
+    mutationFn: () => {
+      if (!storyId) {
+        throw new Error('Historia nao encontrada');
       }
 
-      if (!response.ok) {
-        throw new Error('Erro ao atualizar historia seguida');
-      }
+      return isFollowing ? unfollowStory(storyId) : followStory(storyId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['follows', storyId] });
@@ -115,7 +87,7 @@ export default function StoryDetails() {
 
   const averageRating =
     ratings.length > 0
-      ? ratings.reduce((sum, r) => sum + r.value, 0) / ratings.length
+      ? ratings.reduce((sum, rating) => sum + rating.value, 0) / ratings.length
       : 0;
 
   if (loadingStory) {
@@ -123,7 +95,7 @@ export default function StoryDetails() {
       <div className="min-h-screen">
         <PageHeader title="Historia" />
         <div className="flex min-h-80 items-center justify-center">
-          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
       </div>
     );
@@ -143,7 +115,7 @@ export default function StoryDetails() {
   return (
     <div className="min-h-screen">
       <PageHeader title={story.title || 'Historia'} />
-      <div className="p-6 space-y-6 max-w-6xl">
+      <div className="max-w-6xl space-y-6 p-6">
         <StoryHeader
           story={story}
           averageRating={averageRating}
@@ -151,8 +123,8 @@ export default function StoryDetails() {
           onFollow={() => followMutation.mutate()}
         />
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="space-y-6 lg:col-span-2">
             <ChapterList chapters={chapters} storyId={storyId} />
             <CommentsSection
               comments={comments}
@@ -164,7 +136,7 @@ export default function StoryDetails() {
 
           <div className="space-y-6">
             <div className="rounded-2xl border border-border/30 bg-card/50 p-5">
-              <h3 className="font-heading font-bold text-sm uppercase tracking-wider mb-3">
+              <h3 className="mb-3 font-heading text-sm font-bold uppercase tracking-wider">
                 Estatisticas
               </h3>
 
@@ -177,7 +149,7 @@ export default function StoryDetails() {
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Capitulos</span>
                   <span className="font-medium">
-                    {chapters.filter(c => c.status === 'publicado').length}
+                    {chapters.filter((chapter) => chapter.status === 'publicado').length}
                   </span>
                 </div>
 
@@ -195,19 +167,19 @@ export default function StoryDetails() {
               </div>
             </div>
 
-            {story.genres?.length > 0 && (
+            {Boolean(story.genres?.length) && (
               <div className="rounded-2xl border border-border/30 bg-card/50 p-5">
-                <h3 className="font-heading font-bold text-sm uppercase tracking-wider mb-3">
+                <h3 className="mb-3 font-heading text-sm font-bold uppercase tracking-wider">
                   Generos
                 </h3>
 
                 <div className="flex flex-wrap gap-2">
-                  {story.genres.map((g, i) => (
+                  {story.genres?.map((genre) => (
                     <span
-                      key={i}
-                      className="text-xs bg-primary/10 text-primary px-3 py-1 rounded-full border border-primary/20"
+                      key={genre}
+                      className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs text-primary"
                     >
-                      {g}
+                      {genre}
                     </span>
                   ))}
                 </div>

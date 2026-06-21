@@ -6,52 +6,13 @@ import PageHeader from '../components/PageHeader';
 import StoryCard from '../components/home/StoryCard';
 import { Button } from '../components/ui/button';
 import { useAuth } from '../hooks/UseAuth';
-import { authFetch } from '../services/api';
-import type { Story } from './Home';
-
-type Author = {
-  id: number;
-  username: string;
-  email?: string;
-  role?: string;
-  avatar_url?: string | null;
-  bio?: string | null;
-};
-
-type FollowStatus = {
-  is_following: boolean;
-  followers_count: number;
-};
-
-async function getAuthor(id: string): Promise<Author> {
-  const response = await authFetch(`/api/users/${id}`);
-
-  if (!response.ok) {
-    throw new Error('Erro ao buscar autor');
-  }
-
-  return response.json();
-}
-
-async function getAuthorStories(id: string): Promise<Story[]> {
-  const response = await authFetch(`/api/stories/author/${id}`);
-
-  if (!response.ok) {
-    throw new Error('Erro ao buscar historias do autor');
-  }
-
-  return response.json();
-}
-
-async function getFollowStatus(id: string): Promise<FollowStatus> {
-  const response = await authFetch(`/api/users/${id}/follow-status`);
-
-  if (!response.ok) {
-    throw new Error('Erro ao buscar status');
-  }
-
-  return response.json();
-}
+import { getStoriesByAuthor } from '../services/stories';
+import {
+  followAuthor,
+  getAuthor,
+  getAuthorFollowStatus,
+  unfollowAuthor,
+} from '../services/users';
 
 export default function AuthorPage() {
   const { id } = useParams();
@@ -73,25 +34,20 @@ export default function AuthorPage() {
   const { data: stories = [], isLoading: loadingStories } = useQuery({
     queryKey: ['author-stories', authorId],
     enabled: Boolean(authorId),
-    queryFn: () => getAuthorStories(authorId),
+    queryFn: () => getStoriesByAuthor(authorId),
   });
 
   const { data: followStatus } = useQuery({
     queryKey: ['author-follow-status', authorId],
     enabled: Boolean(authorId) && !isOwnProfile,
-    queryFn: () => getFollowStatus(authorId),
+    queryFn: () => getAuthorFollowStatus(authorId),
   });
 
   const followMutation = useMutation({
     mutationFn: async () => {
-      const method = followStatus?.is_following ? 'DELETE' : 'POST';
-      const response = await authFetch(`/api/users/${authorId}/follow`, {
-        method,
-      });
-
-      if (!response.ok) {
-        throw new Error('Erro ao atualizar autor seguido');
-      }
+      return followStatus?.is_following
+        ? unfollowAuthor(authorId)
+        : followAuthor(authorId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({

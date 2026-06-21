@@ -1,7 +1,13 @@
-import os
 from datetime import datetime, timedelta, timezone
-from src.utils.security import get_jwt_secret_key, JWT_ALGORITHM,ACCESS_TOKEN_EXPIRE_HOURS
+
 import jwt
+
+from src.utils.security import (
+    ACCESS_TOKEN_EXPIRE_HOURS,
+    JWT_ALGORITHM,
+    get_jwt_secret_key,
+)
+
 
 def create_access_token(user_id: int, email: str, role: str) -> tuple[str, int]:
     expires_in = ACCESS_TOKEN_EXPIRE_HOURS * 60 * 60

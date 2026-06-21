@@ -5,7 +5,7 @@ import { MessageSquare, Send, Star } from 'lucide-react';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
-import { authFetch } from '../../services/api';
+import { saveRating as saveRatingRequest } from '../../services/ratings';
 
 function RatingStars({ value, onChange, disabled = false, size = 'md' }) {
   const iconSize = size === 'sm' ? 'h-3.5 w-3.5' : 'h-5 w-5';
@@ -56,25 +56,11 @@ export default function CommentsSection({
 
   const saveRating = useMutation({
     mutationFn: async () => {
-      const response = await authFetch('/api/ratings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          story_id: Number(storyId),
-          value: rating,
-          description: content.trim(),
-        }),
+      return saveRatingRequest({
+        story_id: Number(storyId),
+        value: rating,
+        description: content.trim(),
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.detail || 'Erro ao salvar comentario');
-      }
-
-      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['comments', storyId] });

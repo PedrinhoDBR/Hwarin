@@ -1,146 +1,52 @@
-import os
-import sys
-from src.routes import ratings
-from src.routes import chapter
-from src.routes import story
-from src.routes import auth
-from src.routes import users
-from src.routes import follows
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 from contextlib import asynccontextmanager
+
+import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import inspect, text
-from dotenv import load_dotenv
-from src.db.database import Base, engine
-from src.db.database import SessionLocal
-from src.models.user import User
-import src.models
-from src.utils.crypt_password import hash_password
-import uvicorn
 
-load_dotenv()
-ENVIRONMENT = os.getenv("ENVIRONMENT", "PRODUCTION")
-origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
-
-# temporario
-ADMIN_USERNAME = "admin"
-ADMIN_EMAIL = "admin@gmail.com"
-ADMIN_PASSWORD = "admin123"
-ADMIN_ROLE = "admin"
-
-
-def ensure_admin_user() -> None:
-    db = SessionLocal()
-    try:
-        admin_user = db.query(User).filter(User.email == ADMIN_EMAIL).first()
-        if admin_user:
-            return
-
-        db.add(
-            User(
-                username=ADMIN_USERNAME,
-                email=ADMIN_EMAIL,
-                password_hash=hash_password(ADMIN_PASSWORD),
-                role=ADMIN_ROLE,
-            )
-        )
-        db.commit()
-    finally:
-        db.close()
-
-
-def ensure_story_schema() -> None:
-    inspector = inspect(engine)
-
-    if "story" not in inspector.get_table_names():
-        return
-
-    columns = {
-        column["name"]
-        for column in inspector.get_columns("story")
-    }
-
-    if "synopsis" in columns:
-        return
-
-    with engine.begin() as connection:
-        connection.execute(
-            text("ALTER TABLE story ADD COLUMN synopsis TEXT")
-        )
-
-        if "text" in columns:
-            connection.execute(
-                text(
-                    'UPDATE story SET synopsis = "text" '
-                    "WHERE synopsis IS NULL"
-                )
-            )
-
-
-def ensure_user_profile_schema() -> None:
-    inspector = inspect(engine)
-
-    if "users" not in inspector.get_table_names():
-        return
-
-    columns = {
-        column["name"]
-        for column in inspector.get_columns("users")
-    }
-
-    statements = []
-
-    if "avatar_url" not in columns:
-        statements.append("ALTER TABLE users ADD COLUMN avatar_url VARCHAR")
-
-    if "bio" not in columns:
-        statements.append("ALTER TABLE users ADD COLUMN bio TEXT")
-
-    if not statements:
-        return
-
-    with engine.begin() as connection:
-        for statement in statements:
-            connection.execute(text(statement))
+from src.config import settings
+from src.db.bootstrap import init_database
+from src.routes import auth, chapter, follows, ratings, story, users
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if ENVIRONMENT == "DEVELOPMENT":
-        Base.metadata.drop_all(bind=engine)
-
-    Base.metadata.create_all(bind=engine)
-    ensure_story_schema()
-    ensure_user_profile_schema()
-    ensure_admin_user()
+    init_database()
     yield
 
 
-app = FastAPI(lifespan=lifespan)
+def create_app() -> FastAPI:
+    api = FastAPI(
+        title="Hwarin API",
+        description="API para gerenciamento de usuarios, historias, capitulos e interacoes.",
+        version="1.0.0",
+        lifespan=lifespan,
+    )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    api.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.allowed_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    api.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+    api.include_router(users.router, prefix="/api/users", tags=["users"])
+    api.include_router(story.router, prefix="/api/stories", tags=["stories"])
+    api.include_router(chapter.router, prefix="/api/chapters", tags=["chapters"])
+    api.include_router(follows.router, prefix="/api/follows", tags=["follows"])
+    api.include_router(ratings.router, prefix="/api/ratings", tags=["ratings"])
+
+    @api.get("/", tags=["health"])
+    def root():
+        return {"message": "Hwarin API is running"}
+
+    return api
 
 
-app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-app.include_router(users.router, prefix="/api/users", tags=["users"])
-app.include_router(story.router, prefix="/api/stories", tags=["stories"])
-app.include_router(chapter.router, prefix="/api/chapters", tags=["chapters"])
-app.include_router(follows.router,prefix="/api/follows",tags=["Follows"])
-app.include_router(ratings.router,prefix="/api/ratings",tags=["Ratings"])
-
-@app.get("/")
-def root():
-    return {"message": "API rodando 🚀"}
+app = create_app()
 
 
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=3000, reload=True)
-
+    uvicorn.run("src.app:app", host="0.0.0.0", port=3000, reload=True)

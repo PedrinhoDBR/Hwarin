@@ -4,7 +4,7 @@ import { Alert, Button, Input } from '../components/index';
 import { Mail, Lock, ArrowRight, User } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../hooks/UseAuth';
-import { login, registerUser } from '../services/api';
+import { login, registerUser } from '../services/auth';
 
 export default function Welcome() {
   const navigate = useNavigate();

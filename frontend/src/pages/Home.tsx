@@ -6,36 +6,7 @@ import CommunitySection from '../components/home/CommunitySection';
 import RecentUpdates from '../components/home/RecentUpdates';
 import LibrarySection from '../components/home/LibrarySection';
 
-import { authFetch } from '../services/api';
-
-export interface Story {
-  id: number;
-  title?: string | null;
-  subtitle?: string | null;
-  synopsis?: string | null;
-  status?: string | null;
-  language?: string | null;
-  cover?: string | null;
-  cover_url?: string | null;
-  tags?: string[];
-  genres?: string[];
-  author?: {
-    id: number;
-    username: string;
-    avatar_url?: string | null;
-    bio?: string | null;
-  } | null;
-}
-
-async function getStories(): Promise<Story[]> {
-  const response = await authFetch('/api/stories');
-
-  if (!response.ok) {
-    throw new Error('Erro ao buscar historias');
-  }
-
-  return response.json();
-}
+import { getStories } from '../services/stories';
 
 export default function Home() {
   const {

@@ -5,8 +5,15 @@ import { BookOpen, Edit, Plus, Trash2 } from 'lucide-react';
 import { PageHeader } from '../components';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
-import { authFetch } from '../services/api';
-import type { Story } from './Home';
+import {
+  getChaptersByStory,
+  type Chapter,
+} from '../services/chapters';
+import {
+  deleteStory as deleteStoryRequest,
+  getMyStories,
+} from '../services/stories';
+import type { Story } from '../types/story';
 
 const statusLabels: Record<string, string> = {
   em_elaboracao: 'Em elaboracao',
@@ -24,26 +31,11 @@ const statusColors: Record<string, string> = {
   cancelada: 'border-destructive/20 bg-destructive/10 text-destructive',
 };
 
-type Chapter = {
-  id: number;
-  story_id: number;
-};
-
 export default function MyStories() {
   const queryClient = useQueryClient();
 
   const deleteStory = useMutation({
-    mutationFn: async (id: number) => {
-      const res = await authFetch(`/api/stories/${id}`, {
-        method: 'DELETE',
-      });
-
-      if (!res.ok) {
-        throw new Error('Erro ao deletar historia');
-      }
-
-      return true;
-    },
+    mutationFn: (id: number) => deleteStoryRequest(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-stories'] });
       queryClient.invalidateQueries({ queryKey: ['stories'] });
@@ -54,11 +46,7 @@ export default function MyStories() {
 
   const { data: stories = [], isLoading } = useQuery<Story[]>({
     queryKey: ['my-stories'],
-    queryFn: async () => {
-      const res = await authFetch('/api/stories/me');
-      if (!res.ok) throw new Error('Erro ao buscar historias');
-      return res.json();
-    },
+    queryFn: getMyStories,
   });
 
   const { data: allChapters = [] } = useQuery<Chapter[]>({
@@ -67,9 +55,11 @@ export default function MyStories() {
     queryFn: async () => {
       const results = await Promise.all(
         stories.map(async (story) => {
-          const res = await authFetch(`/api/chapters/story/${story.id}`);
-          if (!res.ok) return [];
-          return res.json();
+          try {
+            return await getChaptersByStory(story.id);
+          } catch {
+            return [];
+          }
         })
       );
 

@@ -4,7 +4,8 @@ import { Link } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { ChevronLeft, Star, Download, Share2, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { authFetch } from '../services/api';
+import { getChapter, getChaptersByStory } from '../services/chapters';
+import { getStory } from '../services/stories';
 
 export default function ChapterReader() {
   const pathParts = window.location.pathname.split('/');
@@ -14,31 +15,19 @@ export default function ChapterReader() {
   const { data: chapter, isLoading } = useQuery({
     queryKey: ['chapter', chapterId],
     enabled: !!chapterId,
-    queryFn: async () => {
-      const res = await authFetch(`/api/chapters/${chapterId}`);
-      if (!res.ok) throw new Error();
-      return res.json();
-    },
+    queryFn: () => getChapter(chapterId),
   });
 
   const { data: story } = useQuery({
     queryKey: ['story-for-chapter', storyId],
     enabled: !!storyId,
-    queryFn: async () => {
-      const res = await authFetch(`/api/stories/${storyId}`);
-      if (!res.ok) throw new Error();
-      return res.json();
-    },
+    queryFn: () => getStory(storyId),
   });
 
   const { data: allChapters = [] } = useQuery({
     queryKey: ['all-chapters', storyId],
     enabled: !!storyId,
-    queryFn: async () => {
-      const res = await authFetch(`/api/chapters/story/${storyId}`)
-      if (!res.ok) throw new Error();
-      return res.json();
-    },
+    queryFn: () => getChaptersByStory(storyId),
   });
 
   const publishedChapters = allChapters

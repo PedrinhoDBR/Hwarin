@@ -1,7 +1,8 @@
 import {
   type ChangeEvent,
+  type Dispatch,
   type FormEvent,
-  useEffect,
+  type SetStateAction,
   useRef,
   useState,
 } from 'react';
@@ -14,52 +15,34 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { useAuth } from '../hooks/UseAuth';
-import { authFetch } from '../services/api';
+import {
+  updateProfile as updateUserProfile,
+  type ProfilePayload,
+} from '../services/users';
 import type { AuthUser } from '../types/auth';
 
-type ProfilePayload = {
-  username: string;
-  avatar_url: string;
-  bio: string;
+type UserProfileFormProps = {
+  user: AuthUser;
+  setUser: Dispatch<SetStateAction<AuthUser | null>>;
 };
 
-export default function User() {
-  const { user, setUser } = useAuth();
+function buildProfilePayload(user: AuthUser): ProfilePayload {
+  return {
+    username: user.username ?? user.name ?? '',
+    avatar_url: user.avatar_url ?? '',
+    bio: user.bio ?? '',
+  };
+}
+
+function UserProfileForm({ user, setUser }: UserProfileFormProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [form, setForm] = useState<ProfilePayload>({
-    username: '',
-    avatar_url: '',
-    bio: '',
-  });
-
-  useEffect(() => {
-    if (!user) return;
-
-    setForm({
-      username: user.username ?? user.name ?? '',
-      avatar_url: user.avatar_url ?? '',
-      bio: user.bio ?? '',
-    });
-  }, [user]);
+  const [form, setForm] = useState<ProfilePayload>(() =>
+    buildProfilePayload(user)
+  );
 
   const updateProfile = useMutation({
-    mutationFn: async (payload: ProfilePayload): Promise<AuthUser> => {
-      const response = await authFetch('/api/users/me', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.detail || 'Erro ao salvar perfil');
-      }
-
-      return data;
-    },
+    mutationFn: (payload: ProfilePayload): Promise<AuthUser> =>
+      updateUserProfile(payload),
     onSuccess: (updatedUser) => {
       setUser((current) => ({
         ...(current ?? updatedUser),
@@ -132,10 +115,10 @@ export default function User() {
 
             <div className="min-w-0 flex-1">
               <h2 className="text-xl font-semibold text-foreground">
-                {user?.username ?? user?.name ?? 'Usuario'}
+                {user.username ?? user.name ?? 'Usuario'}
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                {user?.email}
+                {user.email}
               </p>
             </div>
           </div>
@@ -203,4 +186,21 @@ export default function User() {
       </section>
     </div>
   );
+}
+
+export default function User() {
+  const { user, setUser } = useAuth();
+
+  if (!user) {
+    return (
+      <div className="min-h-screen">
+        <PageHeader title="Perfil" />
+        <section className="p-6 text-sm text-muted-foreground">
+          Sessao nao encontrada. Entre novamente para editar seu perfil.
+        </section>
+      </div>
+    );
+  }
+
+  return <UserProfileForm key={user.id} user={user} setUser={setUser} />;
 }
